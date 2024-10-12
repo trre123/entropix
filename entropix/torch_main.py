@@ -10,8 +10,7 @@ from torch_weights import load_weights
 from torch_sampler import sample
 from prompts import prompt, bp1
 
-
-
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Device selection, tree is like first apple silicion, then cuda, fallback is cpu.
 if torch.backends.mps.is_available():
     device = torch.device("mps")
@@ -72,7 +71,7 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 500000.0, use_scaled
 
 
 def build_attn_mask(seqlen: int, start_pos: int) -> torch.Tensor:
-  mask = None
+  mask = torch.zeros((seqlen, seqlen), dtype=torch.float32).to(device)
   if seqlen > 1:
       mask = torch.full((seqlen, seqlen), float("-inf"))
       mask = torch.triu(mask, diagonal=1)
@@ -97,7 +96,7 @@ def main():
       bsz, seqlen = tokens.shape
       attn_mask = build_attn_mask(seqlen, cur_pos)
       freqs_cis = precompute_freqs_cis(model_params.head_dim, model_params.max_seq_len, model_params.rope_theta, model_params.use_scaled_rope)
-      kvcache = KVCache.new(model_params.n_layers, bsz, model_params.max_seq_len, model_params.n_local_kv_heads, model_params.head_dim).to(device)
+      kvcache = KVCache.new(model_params.n_layers, bsz, model_params.max_seq_len, model_params.n_local_kv_heads, model_params.head_dim).to(DEVICE)
       logits, kvcache, _, _ = xfmr(xfmr_weights, model_params, tokens, cur_pos, freqs_cis[:seqlen], kvcache, attn_mask=attn_mask)
       next_token = torch.argmax(logits[:, -1], dim=-1, keepdim=True).to(torch.int32)
       gen_tokens = next_token
